@@ -29,8 +29,10 @@ export class UsersService {
 
   constructor(private http: HttpClient) {}
 
-  getUsers(): Observable<User[]> {
-    return this.http.get<any>(this.apiUrl).pipe(
+  getUsers(limit: number = 0): Observable<User[]> {
+    let params = new HttpParams().set('limit', limit);
+
+    return this.http.get<any>(this.apiUrl, { params }).pipe(
       map((response) => {
         return response.users.map((user: any) => ({
           id: user.id,

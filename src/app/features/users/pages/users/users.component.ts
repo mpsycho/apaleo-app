@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
 import { Store } from '@ngrx/store';
 import { UsersActions } from '../../store/users.actions';
 import { AppState } from '../../../../reducers';
@@ -8,7 +16,7 @@ import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { tap } from 'rxjs';
+import { Subject, takeUntil, takeWhile, tap } from 'rxjs';
 import { MatSort, MatSortModule, Sort } from '@angular/material/sort';
 import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { User } from '../../services/users.service';
@@ -29,24 +37,27 @@ import { selectUsers } from '../../store/users.selectors';
   ],
 
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UsersComponent {
+export class UsersComponent implements OnInit, AfterViewInit, OnDestroy {
   private liveAnnouncer = inject(LiveAnnouncer);
   private store = inject(Store<AppState>);
 
+  private unsubscribe$ = new Subject<void>();
   dataSource = new MatTableDataSource<User>();
-  users$ = this.store.select(selectUsers).pipe(
-    tap((response) => {
-      this.dataSource.data = response.users;
-    })
-  );
+  users$ = this.store.select(selectUsers);
   displayedColumns: string[] = ['firstName', 'lastName', 'age', 'address'];
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild(MatPaginator) paginator: MatPaginator | undefined;
+  @ViewChild(MatSort) sort: MatSort | undefined;
 
   ngOnInit() {
     this.store.dispatch(UsersActions.loadUsers());
+
+    this.users$.pipe(takeUntil(this.unsubscribe$)).subscribe((response) => {
+      this.dataSource.data = response.users;
+    });
+
     this.dataSource.filterPredicate = (data: User, filter: string) => {
       const filterValue = filter.trim().toLowerCase();
       return (
@@ -57,8 +68,8 @@ export class UsersComponent {
   }
 
   ngAfterViewInit() {
-    this.dataSource.paginator = this.paginator;
-    this.dataSource.sort = this.sort;
+    this.dataSource.paginator = this.paginator ?? this.dataSource.paginator;
+    this.dataSource.sort = this.sort ?? this.dataSource.sort;
   }
 
   announceSortChange(sortState: Sort) {
@@ -73,5 +84,10 @@ export class UsersComponent {
   applyFilter(event: Event) {
     const filterValue = (event.target as HTMLInputElement).value;
     this.dataSource.filter = filterValue.trim().toLowerCase();
+  }
+
+  ngOnDestroy(): void {
+    this.unsubscribe$.next();
+    this.unsubscribe$.complete();
   }
 }
